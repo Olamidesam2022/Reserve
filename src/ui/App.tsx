@@ -52,6 +52,8 @@ export default function App() {
   const [cascadeFrom, setCascadeFrom] = useState(0);
   const [notice, setNotice] = useState('');
   const [brief, setBrief] = useState(false);
+  const [baitForChampion, setBaitForChampion] = useState('');
+  const [baitCounterId, setBaitCounterId] = useState('');
   const [csvText, setCsvText] = useState('');
   const [manualText, setManualText] = useState('');
   const warn = useMemo(() => validate(plan).filter((w) => w.gameIndex === game), [plan, game]);
@@ -341,41 +343,84 @@ export default function App() {
               <PoolList>
                 {available
                   .filter((v) => v.comfort >= 2)
-                  .map((v) => (
-                    <div className="pool-item" key={v.id}>
-                      <Tile id={v.id} locked={false} reserved={v.comfort >= 4} />
-                      <div>
-                        <b>{champName(v.id)}</b>
-                        <small>
-                          {v.role} / COMFORT {v.comfort}
-                        </small>
+                  .map((v) => {
+                    const score = burnScore(plan, v.id, game, own.id, v.role);
+                    const counterOptions = Object.entries(
+                      enemy.players
+                        .filter((player) => player.role === v.role)
+                        .reduce<Record<string, number>>((options, player) => {
+                          for (const [id, comfort] of Object.entries(player.comfort))
+                            options[id] = Math.max(options[id] ?? 0, comfort);
+                          return options;
+                        }, {}),
+                    ).filter(
+                      ([id, comfort]) =>
+                        comfort >= ENGINE_CONFIG.comfort.strongOptionThreshold &&
+                        !lock.has(id) &&
+                        id !== v.id,
+                    );
+                    return (
+                      <div className="pool-item" key={v.id}>
+                        <Tile id={v.id} locked={false} reserved={v.comfort >= 4} />
+                        <div>
+                          <b>{champName(v.id)}</b>
+                          <small>
+                            {v.role} / COMFORT {v.comfort}
+                          </small>
+                        </div>
+                        <span
+                          title={score.reasons.join(' · ')}
+                          className={`pool-score recommendation ${score.recommendation.toLowerCase()}`}
+                        >
+                          {score.holdValue}
+                          <small>{score.recommendation}</small>
+                        </span>
+                        <button
+                          aria-label={`Mark ${champName(v.id)} as bait`}
+                          className="bait-button"
+                          aria-expanded={baitForChampion === v.id}
+                          onClick={() => {
+                            setBaitForChampion((current) => (current === v.id ? '' : v.id));
+                            setBaitCounterId('');
+                          }}
+                        >
+                          {baitForChampion === v.id ? 'CANCEL' : 'BAIT'}
+                        </button>
+                        {baitForChampion === v.id && (
+                          <div className="bait-controls">
+                            <label>
+                              EXPECT {v.role.toUpperCase()} COUNTER
+                              <select
+                                value={baitCounterId}
+                                onChange={(event) => setBaitCounterId(event.currentTarget.value)}
+                              >
+                                <option value="">SELECT STRONG COUNTER</option>
+                                {counterOptions.map(([id]) => (
+                                  <option value={id} key={id}>
+                                    {champName(id)}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <button
+                              className="bait-confirm"
+                              disabled={!baitCounterId}
+                              onClick={() => {
+                                assign(own.id, v.role, v.id, baitCounterId);
+                                setNotice(
+                                  `${champName(v.id)} planned as bait for ${champName(baitCounterId)}.`,
+                                );
+                                setBaitForChampion('');
+                                setBaitCounterId('');
+                              }}
+                            >
+                              CONFIRM PICK
+                            </button>
+                          </div>
+                        )}
                       </div>
-                      <span
-                        title={burnScore(plan, v.id, game, own.id, v.role).reasons.join(' · ')}
-                        className={`pool-score recommendation ${burnScore(plan, v.id, game, own.id, v.role).recommendation.toLowerCase()}`}
-                      >
-                        {burnScore(plan, v.id, game, own.id, v.role).holdValue}
-                        <small>{burnScore(plan, v.id, game, own.id, v.role).recommendation}</small>
-                      </span>
-                      <button
-                        aria-label={`Mark ${champName(v.id)} as bait`}
-                        className="bait-button"
-                        onClick={() => {
-                          const counter = enemy.players
-                            .flatMap((p) => Object.keys(p.comfort))
-                            .find((id) => id !== v.id);
-                          if (counter) {
-                            assign(own.id, v.role, v.id, counter);
-                            setNotice(
-                              `${champName(v.id)} marked for bait planning vs ${champName(counter)}. Add a counter expectation in the series brief.`,
-                            );
-                          }
-                        }}
-                      >
-                        BAIT
-                      </button>
-                    </div>
-                  ))}
+                    );
+                  })}
               </PoolList>
               <label className="warnings">
                 <span>LIVE ENGINE WARNINGS</span>

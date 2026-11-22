@@ -609,6 +609,42 @@ p {
   font: 8px var(--mono);
   padding: 5px;
 }
+.bait-controls {
+  display: flex;
+  flex: 1 0 100%;
+  align-items: end;
+  gap: 8px;
+  padding: 7px 4px 3px;
+  border-top: 1px solid var(--line);
+}
+.bait-controls label {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 5px;
+  color: #c4c6c3;
+  font: 9px var(--mono);
+}
+.bait-controls select {
+  min-height: 30px;
+  background: #171a1b;
+  border: 1px solid #596163;
+  color: #e8e7e2;
+  padding: 5px;
+  font: 10px var(--mono);
+}
+.bait-confirm {
+  min-height: 30px;
+  border: 1px solid var(--amber);
+  background: #2a2925;
+  color: var(--amber);
+  padding: 5px 8px;
+  font: 9px var(--mono);
+}
+.bait-confirm:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
 .warnings {
   display: block;
   margin-top: 18px;

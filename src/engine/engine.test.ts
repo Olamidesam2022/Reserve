@@ -117,4 +117,49 @@ describe('series engine', () => {
     expect(Object.keys(result.scoreDistribution)).toEqual(['2-0', '2-1', '1-2', '0-2']);
     expect(Object.values(result.scoreDistribution).reduce((sum, n) => sum + n, 0)).toBeCloseTo(1);
   });
+
+  it('biases an available opponent counter toward being spent', () => {
+    const baitPlan = (withBait: boolean): Plan => {
+      const baitingBlue = {
+        id: 'blue',
+        name: 'blue',
+        players: [{ playerId: 'blue-mid', role: 'Mid' as const, comfort: { BluePick: 5 } }],
+      };
+      const red = {
+        id: 'red',
+        name: 'red',
+        players: [
+          {
+            playerId: 'red-mid',
+            role: 'Mid' as const,
+            comfort: { Target: 4, Alternate: 3 },
+          },
+        ],
+      };
+      return {
+        ...plan,
+        id: withBait ? 'with-bait' : 'without-bait',
+        series: {
+          ...plan.series,
+          format: 'bo3',
+          teams: [baitingBlue, red],
+          games: plan.series.games.slice(0, 3),
+        },
+        intendedPicks: {
+          1: [
+            {
+              teamId: 'blue',
+              role: 'Mid',
+              championId: 'BluePick',
+              ...(withBait ? { bait: { counterChampionId: 'Target' } } : {}),
+            },
+          ],
+          2: [{ teamId: 'red', role: 'Mid', championId: 'Target' }],
+        },
+      };
+    };
+    const plainResult = simulate(baitPlan(false), 12000);
+    const baitResult = simulate(baitPlan(true), 12000);
+    expect(baitResult.seriesWinChance).toBeGreaterThan(plainResult.seriesWinChance);
+  });
 });
