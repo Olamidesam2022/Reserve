@@ -133,10 +133,10 @@ export default function App() {
     scheduleMotion(() => setPulseChampion(id), 0);
     if (targetGame === 1) {
       scheduleMotion(() => setCascadeFrom(1), 390);
-      scheduleMotion(() => setCascadeFrom(0), 650);
+      scheduleMotion(() => setCascadeFrom(0), 760);
     }
-    scheduleMotion(() => setShakeExhaustion(true), targetGame === 1 ? 670 : 390);
-    scheduleMotion(() => setShakeExhaustion(false), targetGame === 1 ? 870 : 590);
+    scheduleMotion(() => setShakeExhaustion(true), targetGame === 1 ? 780 : 390);
+    scheduleMotion(() => setShakeExhaustion(false), targetGame === 1 ? 980 : 590);
     setNotice(`${champions[id]?.name ?? id} committed to Game ${targetGame}.`);
     window.setTimeout(() => setNotice(''), 2400);
   }
