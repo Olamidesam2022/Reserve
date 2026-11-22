@@ -155,22 +155,21 @@ export function validate(plan: Plan): ValidationWarning[] {
               role,
               message: `${pick.championId} is banned in game ${gameIndex}`,
             });
-        const comfort: Record<string, number> = Object.assign(
-          {},
-          ...team.players.filter((p) => p.role === role).map((p) => p.comfort),
-        );
-        const remaining = Object.entries(comfort).filter(
+        const alreadyPlanned = spent(plan, team.id, gameIndex);
+        for (const pick of rolePicks) alreadyPlanned.add(pick.championId);
+        const remaining = Object.entries(roleComfort(team, role)).filter(
           ([id, value]) =>
-            value >= 3 &&
+            value >= ENGINE_CONFIG.comfort.strongOptionThreshold &&
             !locked.has(id) &&
-            !picks.some((p) => p.teamId === team.id && p.championId === id),
+            !alreadyPlanned.has(id),
         ).length;
-        if (remaining <= 1 && gameIndex >= 3)
+        const gamesRemaining = plan.series.games.length - gameIndex + 1;
+        if (remaining < gamesRemaining)
           warnings.push({
             gameIndex,
             teamId: team.id,
             role,
-            message: `${role} has only ${remaining} comfort pick${remaining === 1 ? '' : 's'} left for game ${gameIndex}`,
+            message: `${role} has ${remaining} strong option${remaining === 1 ? '' : 's'} left for ${gamesRemaining} game${gamesRemaining === 1 ? '' : 's'}`,
           });
       }
   }

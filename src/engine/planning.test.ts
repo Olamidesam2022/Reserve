@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { burnScore } from './planning';
+import { burnScore, validate } from './planning';
 import type { Plan, PlayerPool, Team } from './types';
 
 function makePlan(players: PlayerPool[], pickedAhri = false): Plan {
@@ -70,6 +70,40 @@ describe('burnScore', () => {
     const plan = makePlan([pool('Mid', { Ahri: 5 })]);
     expect(burnScore(plan, 'Ahri', 1).holdValue).toBeGreaterThan(
       burnScore(plan, 'Ahri', 5).holdValue,
+    );
+  });
+
+  it('warns in game one when strong options are fewer than the remaining games', () => {
+    const plan = makePlan([pool('Mid', { Ahri: 5, Orianna: 4 })]);
+    const warning = validate(plan).find(
+      (entry) => entry.gameIndex === 1 && entry.teamId === 'blue' && entry.role === 'Mid',
+    );
+    expect(warning?.message).toBe('Mid has 2 strong options left for 5 games');
+  });
+
+  it('warns when a pick has already been planned for this game', () => {
+    const plan = makePlan([pool('Mid', { Ahri: 5, Orianna: 4 })]);
+    plan.intendedPicks[1] = [{ teamId: 'blue', role: 'Mid', championId: 'Ahri' }];
+    const warning = validate(plan).find(
+      (entry) => entry.gameIndex === 1 && entry.teamId === 'blue' && entry.role === 'Mid',
+    );
+    expect(warning?.message).toBe('Mid has 1 strong option left for 5 games');
+  });
+
+  it('keeps locked champion warnings', () => {
+    const plan = makePlan([pool('Mid', { Ahri: 5 })], true);
+    plan.intendedPicks[2] = [{ teamId: 'blue', role: 'Mid', championId: 'Ahri' }];
+    expect(
+      validate(plan).some((warning) => warning.message.includes('locked from an earlier game')),
+    ).toBe(true);
+  });
+
+  it('keeps banned champion warnings', () => {
+    const plan = makePlan([pool('Mid', { Ahri: 5 })]);
+    plan.series.games[0].bans = ['Ahri'];
+    plan.intendedPicks[1] = [{ teamId: 'blue', role: 'Mid', championId: 'Ahri' }];
+    expect(validate(plan).some((warning) => warning.message.includes('is banned in game 1'))).toBe(
+      true,
     );
   });
 });
