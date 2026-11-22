@@ -1,33 +1,602 @@
-import { useEffect,useMemo,useState } from 'react';
-import { AnimatePresence,motion } from 'framer-motion';
-import { DndContext,useDraggable,useDroppable,type DragEndEvent } from '@dnd-kit/core';
-import { useStore } from '../store';import { champions } from '../data/seed';import { CsvPoolSource,ManualPoolSource } from '../data/poolSource';import { burnScore,exhaustion,lockState,validate } from '../engine';import { ROLES,type Plan,type Role } from '../engine/types';
-let dataDragonVersion='14.24.1';
-function Tile({id,locked=false,reserved=false,pulse=false,onClick}:{id:string;locked?:boolean;reserved?:boolean;pulse?:boolean;onClick?:()=>void}){const champ=champions[id];const {attributes,listeners,setNodeRef,transform,isDragging}=useDraggable({id,disabled:locked});const [failed,setFailed]=useState(false);return <motion.button layout ref={setNodeRef} {...attributes} {...listeners} onClick={onClick} className={`tile ${locked?'locked':''} ${reserved?'reserved':''} ${isDragging?'dragging':''} ${pulse?'lock-pulse':''}`} style={transform?{transform:`translate3d(${transform.x}px,${transform.y}px,0) scale(1.06)`}:undefined} aria-label={`${champ?.name??id}${locked?', locked':''}${reserved?', reserved':''}`}><div className="tile-art">{champ&&!failed?<img src={`https://ddragon.leagueoflegends.com/cdn/${dataDragonVersion}/img/champion/${id}.png`} onError={()=>setFailed(true)} alt=""/>:null}<span>{champ?.name??id}</span></div><b className="tile-state">{locked?'LOCKED':reserved?'HELD':'PICK'}</b></motion.button>}
-function Slot({team,role,id,locked,assign}:{team:string;role:Role;id?:string;locked:boolean;assign:(t:string,r:Role,c:string)=>void}){const{setNodeRef,isOver}=useDroppable({id:`${team}:${role}`});return <div ref={setNodeRef} className={`slot ${team==='red'?'enemy':''} ${isOver?'over':''}`} onClick={()=>id&&assign(team,role,id)}>{id?<Tile id={id} locked={locked} reserved/>:<span className="slot-empty">DROP {role.toUpperCase()}</span>}</div>}
-function BoardCell({team,role,game,pick,bait,locked,current,cascade,pulse,onSelect}:{team:string;role:Role;game:number;pick?:string;bait?:string;locked:boolean;current:boolean;cascade:boolean;pulse:boolean;onSelect:()=>void}){const{setNodeRef,isOver}=useDroppable({id:`${team}:${role}:${game}`});return <div ref={setNodeRef} role="button" tabIndex={0} onClick={onSelect} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onSelect();}}} className={`board-cell ${current?'active-cell':''} ${locked?'burned':''} ${pick?'has-pick':''} ${isOver?'over':''} ${cascade?'cascade':''}`} style={cascade?{animationDelay:`${Math.max(0,game-2)*40}ms`}:undefined} aria-label={`Game ${game} ${role}: ${pick??'empty'}`}>{pick?<><Tile id={pick} locked={locked} reserved={!locked&&game>1} pulse={pulse}/>{bait&&<small className="bait">BAIT → {champions[bait]?.name??bait}</small>}</>:<span>DROP PICK</span>}</div>}
-function Review({plan,actual,champName}:{plan:Plan;actual:Record<number,Record<string,string>>;champName:(id:string)=>string}){const teams=plan.series.teams;return <section className="panel review"><div className="eyebrow">07 / POST-SERIES REVIEW</div><h2>Planned vs. actual</h2><p>Recorded picks are compared with the series plan. Differences are flagged by game and role.</p>{plan.series.games.map(g=><div className="review-game" key={g.index}><b>GAME 0{g.index}</b>{teams.map(team=><div className="review-team" key={team.id}><strong>{team.name}</strong><div className="review-team-grid">{ROLES.map(role=>{const planned=plan.intendedPicks[g.index]?.find(p=>p.teamId===team.id&&p.role===role)?.championId;const played=actual[g.index]?.[`${team.id}:${role}`];const differs=!!played&&played!==planned;return <div className={`review-pick ${differs?'changed':''}`} key={role}><small>{role}</small><span>PLAN · {planned?champName(planned):'—'}</span><span>ACTUAL · {played?champName(played):'NOT RECORDED'}</span>{differs&&<em>PLAN BROKE</em>}</div>})}</div></div>)}</div>)}</section>}
-export default function App(){const{plans,active,game,setGame,setActive,assign,live,toggleLive,record,recordBan,actual,actualBans,importPools}=useStore();const plan=plans[active];const[tab,setTab]=useState<'board'|'review'>('board');const[progress,setProgress]=useState(0);const[result,setResult]=useState<{chance:number;distribution:number[]}|null>(null);const[compareResults,setCompareResults]=useState<Record<string,{chance:number;distribution:number[]}>>({});const[displayChance,setDisplayChance]=useState(0);const[pulseChampion,setPulseChampion]=useState('');const[cascadeFrom,setCascadeFrom]=useState(0);const[notice,setNotice]=useState('');const[brief,setBrief]=useState(false);const[dataVersion,setDataVersion]=useState(dataDragonVersion);const[dragonNames,setDragonNames]=useState<Record<string,string>>({});const[csvText,setCsvText]=useState('');const[manualText,setManualText]=useState('');const warn=useMemo(()=>validate(plan).filter(w=>w.gameIndex===game),[plan,game]);const lock=lockState(plan.series,game);const own=plan.series.teams[0],enemy=plan.series.teams[1];const exhaustionRows=exhaustion(own,plan.series,plan,game);const current=plan.intendedPicks[game]??[];const available=own.players.flatMap(p=>Object.entries(p.comfort).filter(([id])=>!lock.has(id)).map(([id,comfort])=>({id,comfort,role:p.role}))).filter((v,i,a)=>a.findIndex(x=>x.id===v.id)===i);
-useEffect(()=>{let active=true;fetch('https://ddragon.leagueoflegends.com/api/versions.json').then(response=>{if(!response.ok)throw new Error('Data Dragon versions unavailable');return response.json() as Promise<string[]>;}).then(async versions=>{const version=versions[0];const response=await fetch(`https://ddragon.leagueoflegends.com/cdn/${version}/data/en_US/champion.json`);if(!response.ok)throw new Error('Data Dragon champions unavailable');const payload=await response.json() as {data:Record<string,{id:string;name:string}>};if(active){dataDragonVersion=version;setDataVersion(version);setDragonNames(Object.fromEntries(Object.values(payload.data).map(champion=>[champion.id,champion.name])));}}).catch(()=>{});return()=>{active=false;};},[]);
-useEffect(()=>{if(!result){setDisplayChance(0);return;}const target=result.chance;const from=displayChance;const start=performance.now();let frame=0;const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;if(reduced){setDisplayChance(target);return;}const tick=(now:number)=>{const t=Math.min(1,(now-start)/420);const eased=1-Math.pow(1-t,3);setDisplayChance(Math.round(from+(target-from)*eased));if(t<1)frame=requestAnimationFrame(tick);};frame=requestAnimationFrame(tick);return()=>cancelAnimationFrame(frame);},[result?.chance]);
-function dragEnd(e:DragEndEvent){const dest=String(e.over?.id??'').split(':');if(dest.length<2)return;const id=String(e.active.id),team=dest[0],role=dest[1] as Role,targetGame=Number(dest[2]??game);if(lockState(plan.series,targetGame).has(id)){setNotice(`${champions[id]?.name??id} was picked earlier and is locked for Game ${targetGame}.`);return;}setGame(targetGame);assign(team,role,id);setPulseChampion('');setTimeout(()=>setPulseChampion(id),0);if(targetGame===1){setTimeout(()=>setCascadeFrom(1),390);setTimeout(()=>setCascadeFrom(0),1100);}setNotice(`${champions[id]?.name??id} committed to Game ${targetGame}.`);setTimeout(()=>setNotice(''),2400);}
-function runSim(){setProgress(0);setResult(null);setCompareResults({});const worker=new Worker(new URL('../engine/sim.worker.ts',import.meta.url),{type:'module'});worker.postMessage({plans});worker.onmessage=e=>{if(e.data.type==='progress'){setProgress(Math.round((e.data.planIndex+e.data.done/e.data.total)/e.data.planCount*100));setCompareResults(old=>({...old,[e.data.planId]:{chance:old[e.data.planId]?.chance??0,distribution:e.data.distribution}}));if(e.data.planId===plan.id)setResult(old=>({chance:old?.chance??0,distribution:e.data.distribution}));}else if(e.data.type==='result'){setCompareResults(old=>({...old,[e.data.planId]:e.data.result}));if(e.data.planId===plan.id)setResult(e.data.result);}else if(e.data.type==='complete')worker.terminate();};worker.onerror=()=>{setNotice('Simulator could not start. Reload and try again.');worker.terminate();};}
-function importCsvText(text:string){const pools=new CsvPoolSource().parse(text);importPools(own.id,pools);setNotice(`Imported ${pools.length} player pools.`);}function importManualText(text:string){try{const pools=new ManualPoolSource().parse(text);importPools(own.id,pools);setNotice(`Loaded ${pools.length} manual player pools.`);}catch{setNotice('Manual pools need valid JSON: an array of playerId, role and comfort objects.');}}function importCsv(file?:File){if(!file)return;file.text().then(importCsvText);}
-const champName=(id:string)=>dragonNames[id]??champions[id]?.name??id;
-return <main className="app min-h-screen"><header className="topbar"><img className="brand" src="/logo.svg" alt="Reserve"/><div className="top-meta"><span>FEARLESS DRAFT / SERIES OPS</span><b>DATA DRAGON {dataVersion} <i>●</i> LOCAL SESSION</b></div><button className={`live-toggle ${live?'active':''}`} onClick={toggleLive}>{live?'● LIVE MODE':'○ LIVE MODE'}</button></header><section className="hero"><div><div className="eyebrow">SERIES RESOURCE MAP <span>● BO5 / FEARLESS</span></div><h1>Plan the series,<br/><em>not just the draft.</em></h1><p>Every pick spends an option. Keep the right ones in reserve.</p></div><div className="hero-readout"><div className="eyebrow">SERIES WIN CHANCE</div><strong>{result?`${displayChance}%`:'—'}</strong><span>{result?'3 PLANS · 1,200 RUNS EACH':'RUN ALL THREE PLANS'}</span><button className="run-btn" onClick={runSim}>SIMULATE SERIES ↗</button></div></section>
-<div className="toolbar"><div className="tabs"><button className={tab==='board'?'selected':''} onClick={()=>setTab('board')}>01 / SERIES BOARD</button><button className={tab==='review'?'selected':''} onClick={()=>setTab('review')}>02 / POST-SERIES REVIEW</button></div><div className="toolbar-right"><label className="import-label">UPLOAD CSV<input type="file" accept=".csv,text/csv" onChange={e=>importCsv(e.target.files?.[0])}/></label><details className="pool-paste"><summary>PASTE / MANUAL</summary><div><label>CSV<textarea value={csvText} onChange={e=>setCsvText(e.target.value)} placeholder="playerId,role,championId,championName,comfort,isFlex"/></label><button onClick={()=>importCsvText(csvText)}>IMPORT CSV TEXT</button><label>MANUAL POOLS · JSON<textarea value={manualText} onChange={e=>setManualText(e.target.value)} placeholder="[{&quot;playerId&quot;:&quot;mid-1&quot;,&quot;role&quot;:&quot;Mid&quot;,&quot;comfort&quot;:{&quot;Ahri&quot;:5}}]"/></label><button onClick={()=>importManualText(manualText)}>LOAD MANUAL POOLS</button></div></details><button onClick={()=>setBrief(true)}>PRINT SERIES BRIEF ↗</button></div></div>
-{tab==='board'?<DndContext onDragEnd={dragEnd}><div className="cockpit"><section className="board panel"><div className="panel-head"><div><div className="eyebrow">01 / SERIES BOARD</div><h2>Draft allocation <span>— {own.name} / {enemy.name}</span></h2></div><div className="game-select">{plan.series.games.map(g=><button key={g.index} className={game===g.index?'on':''} onClick={()=>setGame(g.index)}>G{g.index}</button>)}</div></div><div className="board-wrap"><div className="board-head"><span>ROLE</span>{plan.series.games.map(g=><button key={g.index} className={g.index===game?'col-active':''} onClick={()=>setGame(g.index)}>GAME 0{g.index}</button>)}</div>{ROLES.map(role=><div className="board-row" key={role}><div className="role-tag">{role}<small>{own.players.find(p=>p.role===role)?.playerId.split('-')[1].toUpperCase()}</small></div>{plan.series.games.map(g=>{const pick=plan.intendedPicks[g.index]?.find(p=>p.teamId===own.id&&p.role===role);const locked=!!pick&&lockState(plan.series,g.index).has(pick.championId);return <BoardCell key={g.index} team={own.id} role={role} game={g.index} pick={pick?.championId} bait={pick?.bait?.counterChampionId} locked={locked} current={g.index===game} cascade={cascadeFrom>0&&g.index>cascadeFrom} pulse={pulseChampion===pick?.championId} onSelect={()=>setGame(g.index)}/>})}</div>)}</div><div className="board-foot"><span><i className="dot amber"/> HELD IN RESERVE</span><span><i className="dot grey"/> SPENT / LOCKED</span><span className="mono">{current.filter(p=>p.teamId===own.id).length} / 5 PICKS PLANNED</span></div></section>
-<aside className="right-rail"><section className="panel opponent"><div className="eyebrow">02 / OPPONENT READ</div><div className="enemy-title">{enemy.name}<span>BLUE SIDE</span></div><div className="opponent-picks">{ROLES.map(r=><span key={r}>{r.slice(0,1)}<b>{champName(plan.intendedPicks[game]?.find(p=>p.teamId===enemy.id&&p.role===r)?.championId??'—')}</b></span>)}</div><div className="eyebrow">LIVE ENEMY ROLE AT RISK</div><div className="risk-role">{exhaustion(enemy,plan.series,plan,game)[0].role}<strong>{exhaustion(enemy,plan.series,plan,game)[0].remaining}<small> OPTIONS</small></strong></div></section><section className="panel depletion"><div className="eyebrow">03 / YOUR OPTION DEPTH</div><h3>Exhaustion forecast</h3>{exhaustionRows.map((r,i)=><div className={`meter-row ${r.remaining<=2?'critical':''}`} key={r.role}><div><span>{r.role}</span><small>{r.remaining} STRONG LEFT</small></div><div className="meter"><i style={{width:`${Math.min(100,r.remaining/5*100)}%`}}/></div><b>{String(i+1).padStart(2,'0')}</b></div>)}<p className="forecast">FIRST TO RUN DRY <strong>{exhaustionRows[0]?.role}</strong></p></section></aside></div>
-<div className="lower-grid"><section className="panel editor"><div className="panel-head"><div><div className="eyebrow">04 / PICK RESERVE</div><h2>Available comfort pool</h2></div><span className="mono">DRAG TO ROLE SLOT</span></div><div className="pool-list">{available.filter(v=>v.comfort>=2).map(v=><div className="pool-item" key={v.id}><Tile id={v.id} locked={false} reserved={v.comfort>=4}/><div><b>{champName(v.id)}</b><small>{v.role} / COMFORT {v.comfort}</small></div><span className="pool-score">{burnScore(plan,v.id,game,own.id,v.role).score.toFixed(0)}</span><button aria-label={`Mark ${champName(v.id)} as bait`} className="bait-button" onClick={()=>{const counter=enemy.players.flatMap(p=>Object.keys(p.comfort)).find(id=>id!==v.id);if(counter){assign(own.id,v.role,v.id,counter);setNotice(`${champName(v.id)} marked for bait planning vs ${champName(counter)}. Add a counter expectation in the series brief.`);}}}>BAIT</button></div>)}</div><label className="warnings"><span>LIVE ENGINE WARNINGS</span>{warn.length?<ul>{warn.map((w,i)=><li key={i}>⚠ {w.message}</li>)}</ul>:<b>✓ No structural risks in Game {game}</b>}</label></section><section className="panel analysis"><div className="eyebrow">05 / LOCK STATE</div><h3>Series lock ledger</h3><div className="lock-count">{lock.size.toString().padStart(2,'0')}<span> CHAMPIONS SPENT BEFORE G{game}</span></div><div className="lock-list">{[...lock].map(id=><span key={id}>{champName(id)}</span>)}{!lock.size&&<span className="empty">No picks locked yet. First game is wide open.</span>}</div><div className="compare"><div className="eyebrow">PLAN VARIANTS</div>{plans.map((p,i)=><div className={`plan-compare-row ${active===i?'plan-selected':''}`} key={p.id}><button className={active===i?'plan-selected':''} onClick={()=>{setActive(i);setResult(compareResults[p.id]??null);}}>PLAN {String.fromCharCode(65+i)} <span>{p.name}</span></button><strong>{compareResults[p.id]?.chance??'—'}<small>{compareResults[p.id]?'% WIN':' WIN'}</small></strong><span className="risk-count">{validate(p).length} WARN</span></div>)}</div>{result&&<div className="distribution"><div className="eyebrow">WIN PROBABILITY DISTRIBUTION</div><div className="bars">{result.distribution.map((v,i)=><i key={i} title={`${i*10}–${i*10+10}%`} style={{height:`${Math.max(4,v/Math.max(...result.distribution)*100)}%`}}/>)}</div><div className="progress">SIMULATION {progress}% COMPLETE</div></div>}</section></div>
-<section className="panel enemy-board"><div className="panel-head"><div><div className="eyebrow">06 / OPPONENT RESOURCE MAP</div><h2>{enemy.name}<span> / projected reserve</span></h2></div><span className="mono blue-tag">OPPOSING SIDE / STEEL BLUE</span></div><div className="enemy-picks">{ROLES.map(role=><div key={role}><span>{role}</span><Slot team="red" role={role} id={plan.intendedPicks[game]?.find(p=>p.teamId===enemy.id&&p.role===role)?.championId} locked={false} assign={assign}/>{live&&<select className="record" aria-label={`Record actual ${role} pick`} value={actual[game]?.[`${enemy.id}:${role}`]??''} onChange={e=>{if(e.currentTarget.value)record(enemy.id,role,e.currentTarget.value);}}><option value="">ACTUAL PICK</option>{Object.keys(enemy.players.find(p=>p.role===role)?.comfort??{}).map(id=><option key={id} value={id}>{champName(id)}</option>)}</select>}</div>)}</div>{live&&<div className="own-actual-row"><b>OUR ACTUAL PICKS</b>{ROLES.map(role=><label key={role}>{role}<select className="record" aria-label={`Record our actual ${role} pick`} value={actual[game]?.[`${own.id}:${role}`]??''} onChange={e=>{if(e.currentTarget.value)record(own.id,role,e.currentTarget.value);}}><option value="">SELECT PICK</option>{Object.keys(own.players.find(p=>p.role===role)?.comfort??{}).map(id=><option key={id} value={id}>{champName(id)}</option>)}</select></label>)}</div>}</section>{live&&<section className="panel live-bans"><div className="eyebrow">LIVE MODE / GAME BANS</div><label>RECORD BAN <select className="record" value="" onChange={e=>{if(e.currentTarget.value)recordBan(e.currentTarget.value);}}><option value="">SELECT CHAMPION</option>{Object.keys(champions).filter(id=>!(actualBans[game]??[]).includes(id)).map(id=><option key={id} value={id}>{champName(id)}</option>)}</select></label><div>{(actualBans[game]??[]).map(id=><span key={id}>{champName(id)}</span>)}</div></section>}
-</DndContext>:<Review plan={plan} actual={actual} champName={champName}/>}
-<footer><img src="/logo-mark.svg" alt=""/><span>RESERVE / SERIES RESOURCE PLANNER</span><span>NO BACKEND · LOCAL STORAGE ONLY</span></footer>
-<AnimatePresence>{notice&&<motion.div className="inline-notice" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0}}>{notice}</motion.div>}</AnimatePresence>{brief&&<div className="brief-overlay"><section className="brief"><button className="close" onClick={()=>setBrief(false)}>CLOSE ×</button><img src="/logo.svg"/><div className="eyebrow">SERIES BRIEF / {plan.series.format.toUpperCase()}</div><h1>{own.name} <span>vs</span> {enemy.name}</h1><p>Plan the series, not just the draft. · {new Date().toLocaleDateString()}</p>{plan.series.games.map(g=><div className="brief-game" key={g.index}><b>GAME 0{g.index}</b><span>{(plan.intendedPicks[g.index]??[]).map(p=>`${p.teamId===own.id?'N':'I'}:${champName(p.championId)} (${p.role})`).join(' · ')||'No picks planned'}</span></div>)}<button className="run-btn" onClick={()=>window.print()}>PRINT / SAVE AS PDF ↗</button></section></div>}</main>}
-
-
-
-
-
-
-
-
+import { useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { DndContext, type DragEndEvent } from '@dnd-kit/core';
+import { useStore } from '../store';
+import { champions } from '../data/seed';
+import { CsvPoolSource, ManualPoolSource } from '../data/poolSource';
+import { burnScore, exhaustion, lockState, validate } from '../engine';
+import { ROLES, type Role } from '../engine/types';
+import { BoardCell, Review, Slot, Tile } from './components/Primitives';
+import {
+  Brief,
+  EnemyBoard,
+  ExhaustionPanel,
+  Hero,
+  LiveBans,
+  LockLedger,
+  OpponentPanel,
+  PlanCompare,
+  PoolList,
+  SeriesBoard,
+  Toolbar,
+} from './components/Sections';
+import { useCountUp } from './hooks/useCountUp';
+import { useDataDragon } from './hooks/useDataDragon';
+import { useSimulation } from './hooks/useSimulation';
+export default function App() {
+  const {
+    plans,
+    active,
+    game,
+    setGame,
+    setActive,
+    assign,
+    live,
+    toggleLive,
+    record,
+    recordBan,
+    actual,
+    actualBans,
+    importPools,
+  } = useStore();
+  const plan = plans[active];
+  const [tab, setTab] = useState<'board' | 'review'>('board');
+  const { version: dataVersion, names: dragonNames } = useDataDragon();
+  const simulation = useSimulation(plans, plan.id, () =>
+    setNotice('Simulator could not start. Reload and try again.'),
+  );
+  const { progress, result, compareResults } = simulation;
+  const countUp = useCountUp(result?.chance);
+  const [pulseChampion, setPulseChampion] = useState('');
+  const [cascadeFrom, setCascadeFrom] = useState(0);
+  const [notice, setNotice] = useState('');
+  const [brief, setBrief] = useState(false);
+  const [csvText, setCsvText] = useState('');
+  const [manualText, setManualText] = useState('');
+  const warn = useMemo(() => validate(plan).filter((w) => w.gameIndex === game), [plan, game]);
+  const lock = lockState(plan.series, game);
+  const own = plan.series.teams[0],
+    enemy = plan.series.teams[1];
+  const exhaustionRows = exhaustion(own, plan.series, plan, game);
+  const current = plan.intendedPicks[game] ?? [];
+  const available = own.players
+    .flatMap((p) =>
+      Object.entries(p.comfort)
+        .filter(([id]) => !lock.has(id))
+        .map(([id, comfort]) => ({ id, comfort, role: p.role })),
+    )
+    .filter((v, i, a) => a.findIndex((x) => x.id === v.id) === i);
+  function dragEnd(e: DragEndEvent) {
+    const dest = String(e.over?.id ?? '').split(':');
+    if (dest.length < 2) return;
+    const id = String(e.active.id),
+      team = dest[0],
+      role = dest[1] as Role,
+      targetGame = Number(dest[2] ?? game);
+    if (lockState(plan.series, targetGame).has(id)) {
+      setNotice(
+        `${champions[id]?.name ?? id} was picked earlier and is locked for Game ${targetGame}.`,
+      );
+      return;
+    }
+    setGame(targetGame);
+    assign(team, role, id);
+    setPulseChampion('');
+    setTimeout(() => setPulseChampion(id), 0);
+    if (targetGame === 1) {
+      setTimeout(() => setCascadeFrom(1), 390);
+      setTimeout(() => setCascadeFrom(0), 1100);
+    }
+    setNotice(`${champions[id]?.name ?? id} committed to Game ${targetGame}.`);
+    setTimeout(() => setNotice(''), 2400);
+  }
+  function importCsvText(text: string) {
+    const pools = new CsvPoolSource().parse(text);
+    importPools(own.id, pools);
+    setNotice(`Imported ${pools.length} player pools.`);
+  }
+  function importManualText(text: string) {
+    try {
+      const pools = new ManualPoolSource().parse(text);
+      importPools(own.id, pools);
+      setNotice(`Loaded ${pools.length} manual player pools.`);
+    } catch {
+      setNotice('Manual pools need valid JSON: an array of playerId, role and comfort objects.');
+    }
+  }
+  function importCsv(file?: File) {
+    if (!file) return;
+    file.text().then(importCsvText);
+  }
+  const champName = (id: string) => dragonNames[id] ?? champions[id]?.name ?? id;
+  return (
+    <main className="app min-h-screen">
+      <header className="topbar">
+        <img className="brand" src="/logo.svg" alt="Reserve" />
+        <div className="top-meta">
+          <span>FEARLESS DRAFT / SERIES OPS</span>
+          <b>
+            DATA DRAGON {dataVersion} <i>●</i> LOCAL SESSION
+          </b>
+        </div>
+        <button className={`live-toggle ${live ? 'active' : ''}`} onClick={toggleLive}>
+          {live ? '● LIVE MODE' : '○ LIVE MODE'}
+        </button>
+      </header>
+      <Hero>
+        <div>
+          <div className="eyebrow">
+            SERIES RESOURCE MAP <span>● BO5 / FEARLESS</span>
+          </div>
+          <h1>
+            Plan the series,
+            <br />
+            <em>not just the draft.</em>
+          </h1>
+          <p>Every pick spends an option. Keep the right ones in reserve.</p>
+        </div>
+        <div className="hero-readout">
+          <div className="eyebrow">SERIES WIN CHANCE</div>
+          <strong>{result ? `${countUp}%` : '—'}</strong>
+          <span>{result ? '3 PLANS · 1,200 RUNS EACH' : 'RUN ALL THREE PLANS'}</span>
+          <button className="run-btn" onClick={simulation.run}>
+            SIMULATE SERIES ↗
+          </button>
+        </div>
+      </Hero>
+      <Toolbar>
+        <div className="tabs">
+          <button className={tab === 'board' ? 'selected' : ''} onClick={() => setTab('board')}>
+            01 / SERIES BOARD
+          </button>
+          <button className={tab === 'review' ? 'selected' : ''} onClick={() => setTab('review')}>
+            02 / POST-SERIES REVIEW
+          </button>
+        </div>
+        <div className="toolbar-right">
+          <label className="import-label">
+            UPLOAD CSV
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(e) => importCsv(e.target.files?.[0])}
+            />
+          </label>
+          <details className="pool-paste">
+            <summary>PASTE / MANUAL</summary>
+            <div>
+              <label>
+                CSV
+                <textarea
+                  value={csvText}
+                  onChange={(e) => setCsvText(e.target.value)}
+                  placeholder="playerId,role,championId,championName,comfort,isFlex"
+                />
+              </label>
+              <button onClick={() => importCsvText(csvText)}>IMPORT CSV TEXT</button>
+              <label>
+                MANUAL POOLS · JSON
+                <textarea
+                  value={manualText}
+                  onChange={(e) => setManualText(e.target.value)}
+                  placeholder='[{"playerId":"mid-1","role":"Mid","comfort":{"Ahri":5}}]'
+                />
+              </label>
+              <button onClick={() => importManualText(manualText)}>LOAD MANUAL POOLS</button>
+            </div>
+          </details>
+          <button onClick={() => setBrief(true)}>PRINT SERIES BRIEF ↗</button>
+        </div>
+      </Toolbar>
+      {tab === 'board' ? (
+        <DndContext onDragEnd={dragEnd}>
+          <div className="cockpit">
+            <SeriesBoard>
+              <div className="panel-head">
+                <div>
+                  <div className="eyebrow">01 / SERIES BOARD</div>
+                  <h2>
+                    Draft allocation{' '}
+                    <span>
+                      — {own.name} / {enemy.name}
+                    </span>
+                  </h2>
+                </div>
+                <div className="game-select">
+                  {plan.series.games.map((g) => (
+                    <button
+                      key={g.index}
+                      className={game === g.index ? 'on' : ''}
+                      onClick={() => setGame(g.index)}
+                    >
+                      G{g.index}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="board-wrap">
+                <div className="board-head">
+                  <span>ROLE</span>
+                  {plan.series.games.map((g) => (
+                    <button
+                      key={g.index}
+                      className={g.index === game ? 'col-active' : ''}
+                      onClick={() => setGame(g.index)}
+                    >
+                      GAME 0{g.index}
+                    </button>
+                  ))}
+                </div>
+                {ROLES.map((role) => (
+                  <div className="board-row" key={role}>
+                    <div className="role-tag">
+                      {role}
+                      <small>
+                        {own.players
+                          .find((p) => p.role === role)
+                          ?.playerId.split('-')[1]
+                          .toUpperCase()}
+                      </small>
+                    </div>
+                    {plan.series.games.map((g) => {
+                      const pick = plan.intendedPicks[g.index]?.find(
+                        (p) => p.teamId === own.id && p.role === role,
+                      );
+                      const locked = !!pick && lockState(plan.series, g.index).has(pick.championId);
+                      return (
+                        <BoardCell
+                          key={g.index}
+                          team={own.id}
+                          role={role}
+                          game={g.index}
+                          pick={pick?.championId}
+                          bait={pick?.bait?.counterChampionId}
+                          locked={locked}
+                          current={g.index === game}
+                          cascade={cascadeFrom > 0 && g.index > cascadeFrom}
+                          pulse={pulseChampion === pick?.championId}
+                          onSelect={() => setGame(g.index)}
+                        />
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+              <div className="board-foot">
+                <span>
+                  <i className="dot amber" /> HELD IN RESERVE
+                </span>
+                <span>
+                  <i className="dot grey" /> SPENT / LOCKED
+                </span>
+                <span className="mono">
+                  {current.filter((p) => p.teamId === own.id).length} / 5 PICKS PLANNED
+                </span>
+              </div>
+            </SeriesBoard>
+            <aside className="right-rail">
+              <OpponentPanel>
+                <div className="eyebrow">02 / OPPONENT READ</div>
+                <div className="enemy-title">
+                  {enemy.name}
+                  <span>BLUE SIDE</span>
+                </div>
+                <div className="opponent-picks">
+                  {ROLES.map((r) => (
+                    <span key={r}>
+                      {r.slice(0, 1)}
+                      <b>
+                        {champName(
+                          plan.intendedPicks[game]?.find(
+                            (p) => p.teamId === enemy.id && p.role === r,
+                          )?.championId ?? '—',
+                        )}
+                      </b>
+                    </span>
+                  ))}
+                </div>
+                <div className="eyebrow">LIVE ENEMY ROLE AT RISK</div>
+                <div className="risk-role">
+                  {exhaustion(enemy, plan.series, plan, game)[0].role}
+                  <strong>
+                    {exhaustion(enemy, plan.series, plan, game)[0].remaining}
+                    <small> OPTIONS</small>
+                  </strong>
+                </div>
+              </OpponentPanel>
+              <ExhaustionPanel>
+                <div className="eyebrow">03 / YOUR OPTION DEPTH</div>
+                <h3>Exhaustion forecast</h3>
+                {exhaustionRows.map((r, i) => (
+                  <div className={`meter-row ${r.remaining <= 2 ? 'critical' : ''}`} key={r.role}>
+                    <div>
+                      <span>{r.role}</span>
+                      <small>{r.remaining} STRONG LEFT</small>
+                    </div>
+                    <div className="meter">
+                      <i style={{ width: `${Math.min(100, (r.remaining / 5) * 100)}%` }} />
+                    </div>
+                    <b>{String(i + 1).padStart(2, '0')}</b>
+                  </div>
+                ))}
+                <p className="forecast">
+                  FIRST TO RUN DRY <strong>{exhaustionRows[0]?.role}</strong>
+                </p>
+              </ExhaustionPanel>
+            </aside>
+          </div>
+          <div className="lower-grid">
+            <section className="panel editor">
+              <div className="panel-head">
+                <div>
+                  <div className="eyebrow">04 / PICK RESERVE</div>
+                  <h2>Available comfort pool</h2>
+                </div>
+                <span className="mono">DRAG TO ROLE SLOT</span>
+              </div>
+              <PoolList>
+                {available
+                  .filter((v) => v.comfort >= 2)
+                  .map((v) => (
+                    <div className="pool-item" key={v.id}>
+                      <Tile id={v.id} locked={false} reserved={v.comfort >= 4} />
+                      <div>
+                        <b>{champName(v.id)}</b>
+                        <small>
+                          {v.role} / COMFORT {v.comfort}
+                        </small>
+                      </div>
+                      <span className="pool-score">
+                        {burnScore(plan, v.id, game, own.id, v.role).score.toFixed(0)}
+                      </span>
+                      <button
+                        aria-label={`Mark ${champName(v.id)} as bait`}
+                        className="bait-button"
+                        onClick={() => {
+                          const counter = enemy.players
+                            .flatMap((p) => Object.keys(p.comfort))
+                            .find((id) => id !== v.id);
+                          if (counter) {
+                            assign(own.id, v.role, v.id, counter);
+                            setNotice(
+                              `${champName(v.id)} marked for bait planning vs ${champName(counter)}. Add a counter expectation in the series brief.`,
+                            );
+                          }
+                        }}
+                      >
+                        BAIT
+                      </button>
+                    </div>
+                  ))}
+              </PoolList>
+              <label className="warnings">
+                <span>LIVE ENGINE WARNINGS</span>
+                {warn.length ? (
+                  <ul>
+                    {warn.map((w, i) => (
+                      <li key={i}>⚠ {w.message}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <b>✓ No structural risks in Game {game}</b>
+                )}
+              </label>
+            </section>
+            <LockLedger>
+              <div className="eyebrow">05 / LOCK STATE</div>
+              <h3>Series lock ledger</h3>
+              <div className="lock-count">
+                {lock.size.toString().padStart(2, '0')}
+                <span> CHAMPIONS SPENT BEFORE G{game}</span>
+              </div>
+              <div className="lock-list">
+                {[...lock].map((id) => (
+                  <span key={id}>{champName(id)}</span>
+                ))}
+                {!lock.size && (
+                  <span className="empty">No picks locked yet. First game is wide open.</span>
+                )}
+              </div>
+              <PlanCompare>
+                <div className="eyebrow">PLAN VARIANTS</div>
+                {plans.map((p, i) => (
+                  <div
+                    className={`plan-compare-row ${active === i ? 'plan-selected' : ''}`}
+                    key={p.id}
+                  >
+                    <button
+                      className={active === i ? 'plan-selected' : ''}
+                      onClick={() => {
+                        setActive(i);
+                        simulation.selectResult(p.id);
+                      }}
+                    >
+                      PLAN {String.fromCharCode(65 + i)} <span>{p.name}</span>
+                    </button>
+                    <strong>
+                      {compareResults[p.id]?.chance ?? '—'}
+                      <small>{compareResults[p.id] ? '% WIN' : ' WIN'}</small>
+                    </strong>
+                    <span className="risk-count">{validate(p).length} WARN</span>
+                  </div>
+                ))}
+              </PlanCompare>
+              {result && (
+                <div className="distribution">
+                  <div className="eyebrow">WIN PROBABILITY DISTRIBUTION</div>
+                  <div className="bars">
+                    {result.distribution.map((v, i) => (
+                      <i
+                        key={i}
+                        title={`${i * 10}–${i * 10 + 10}%`}
+                        style={{
+                          height: `${Math.max(4, (v / Math.max(...result.distribution)) * 100)}%`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <div className="progress">SIMULATION {progress}% COMPLETE</div>
+                </div>
+              )}
+            </LockLedger>
+          </div>
+          <EnemyBoard>
+            <div className="panel-head">
+              <div>
+                <div className="eyebrow">06 / OPPONENT RESOURCE MAP</div>
+                <h2>
+                  {enemy.name}
+                  <span> / projected reserve</span>
+                </h2>
+              </div>
+              <span className="mono blue-tag">OPPOSING SIDE / STEEL BLUE</span>
+            </div>
+            <div className="enemy-picks">
+              {ROLES.map((role) => (
+                <div key={role}>
+                  <span>{role}</span>
+                  <Slot
+                    team="red"
+                    role={role}
+                    id={
+                      plan.intendedPicks[game]?.find(
+                        (p) => p.teamId === enemy.id && p.role === role,
+                      )?.championId
+                    }
+                    locked={false}
+                    assign={assign}
+                  />
+                  {live && (
+                    <select
+                      className="record"
+                      aria-label={`Record actual ${role} pick`}
+                      value={actual[game]?.[`${enemy.id}:${role}`] ?? ''}
+                      onChange={(e) => {
+                        if (e.currentTarget.value) record(enemy.id, role, e.currentTarget.value);
+                      }}
+                    >
+                      <option value="">ACTUAL PICK</option>
+                      {Object.keys(enemy.players.find((p) => p.role === role)?.comfort ?? {}).map(
+                        (id) => (
+                          <option key={id} value={id}>
+                            {champName(id)}
+                          </option>
+                        ),
+                      )}
+                    </select>
+                  )}
+                </div>
+              ))}
+            </div>
+            {live && (
+              <div className="own-actual-row">
+                <b>OUR ACTUAL PICKS</b>
+                {ROLES.map((role) => (
+                  <label key={role}>
+                    {role}
+                    <select
+                      className="record"
+                      aria-label={`Record our actual ${role} pick`}
+                      value={actual[game]?.[`${own.id}:${role}`] ?? ''}
+                      onChange={(e) => {
+                        if (e.currentTarget.value) record(own.id, role, e.currentTarget.value);
+                      }}
+                    >
+                      <option value="">SELECT PICK</option>
+                      {Object.keys(own.players.find((p) => p.role === role)?.comfort ?? {}).map(
+                        (id) => (
+                          <option key={id} value={id}>
+                            {champName(id)}
+                          </option>
+                        ),
+                      )}
+                    </select>
+                  </label>
+                ))}
+              </div>
+            )}
+          </EnemyBoard>
+          {live && (
+            <LiveBans>
+              <div className="eyebrow">LIVE MODE / GAME BANS</div>
+              <label>
+                RECORD BAN{' '}
+                <select
+                  className="record"
+                  value=""
+                  onChange={(e) => {
+                    if (e.currentTarget.value) recordBan(e.currentTarget.value);
+                  }}
+                >
+                  <option value="">SELECT CHAMPION</option>
+                  {Object.keys(champions)
+                    .filter((id) => !(actualBans[game] ?? []).includes(id))
+                    .map((id) => (
+                      <option key={id} value={id}>
+                        {champName(id)}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <div>
+                {(actualBans[game] ?? []).map((id) => (
+                  <span key={id}>{champName(id)}</span>
+                ))}
+              </div>
+            </LiveBans>
+          )}
+        </DndContext>
+      ) : (
+        <Review plan={plan} actual={actual} champName={champName} />
+      )}
+      <footer>
+        <img src="/logo-mark.svg" alt="" />
+        <span>RESERVE / SERIES RESOURCE PLANNER</span>
+        <span>NO BACKEND · LOCAL STORAGE ONLY</span>
+      </footer>
+      <AnimatePresence>
+        {notice && (
+          <motion.div
+            className="inline-notice"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+          >
+            {notice}
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {brief && (
+        <div className="brief-overlay">
+          <Brief>
+            <button className="close" onClick={() => setBrief(false)}>
+              CLOSE ×
+            </button>
+            <img src="/logo.svg" />
+            <div className="eyebrow">SERIES BRIEF / {plan.series.format.toUpperCase()}</div>
+            <h1>
+              {own.name} <span>vs</span> {enemy.name}
+            </h1>
+            <p>Plan the series, not just the draft. · {new Date().toLocaleDateString()}</p>
+            {plan.series.games.map((g) => (
+              <div className="brief-game" key={g.index}>
+                <b>GAME 0{g.index}</b>
+                <span>
+                  {(plan.intendedPicks[g.index] ?? [])
+                    .map(
+                      (p) =>
+                        `${p.teamId === own.id ? 'N' : 'I'}:${champName(p.championId)} (${p.role})`,
+                    )
+                    .join(' · ') || 'No picks planned'}
+                </span>
+              </div>
+            ))}
+            <button className="run-btn" onClick={() => window.print()}>
+              PRINT / SAVE AS PDF ↗
+            </button>
+          </Brief>
+        </div>
+      )}
+    </main>
+  );
+}
