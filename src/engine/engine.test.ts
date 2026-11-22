@@ -45,7 +45,8 @@ describe('series engine', () => {
   });
   it('scores a pick with readable reasons', () => {
     const result = burnScore(plan, 'Ahri', 1);
-    expect(result.score).toBeGreaterThan(0);
+    expect(result.holdValue).toBeGreaterThan(0);
+    expect(result.recommendation).toMatch(/^(SPEND|HOLD|NEUTRAL)$/);
     expect(result.reasons.length).toBeGreaterThan(0);
   });
   it('reports remaining options and locked-pick warnings', () => {

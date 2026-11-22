@@ -43,4 +43,11 @@ Each row records one champion comfort rating for one player and role. Roles are 
 
 ## How scoring works
 
-The champion reserve score and its weights are being refined as part of the engine update. This section will describe the final hold value and recommendation rules after that change.
+Each pool champion receives a **hold value from 0 to 100**. Higher values mean it is more valuable to keep the champion in reserve. The score combines four normalized signals:
+
+- **Scarcity (40%)**: `1 / strong options remaining`, where strong means comfort 3 or higher. A champion that is the last strong option contributes the most.
+- **Comfort (30%)**: the team’s comfort rating divided by 5.
+- **Flexibility (20%)**: the share of possible role flexibility beyond a single role.
+- **Games remaining (10%)**: games still to be played, including the current game, divided by the series length.
+
+The result is rounded to the nearest whole number. Scores of 65 or higher recommend **HOLD**; scores of 35 or lower recommend **SPEND**; scores in between are **NEUTRAL**. The pool list includes a brief reason for each score, such as a last strong option, comfort rating, or flex value. Tuning weights and thresholds live together in `src/engine/config.ts`.

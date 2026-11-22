@@ -346,8 +346,12 @@ export default function App() {
                           {v.role} / COMFORT {v.comfort}
                         </small>
                       </div>
-                      <span className="pool-score">
-                        {burnScore(plan, v.id, game, own.id, v.role).score.toFixed(0)}
+                      <span
+                        title={burnScore(plan, v.id, game, own.id, v.role).reasons.join(' · ')}
+                        className={`pool-score recommendation ${burnScore(plan, v.id, game, own.id, v.role).recommendation.toLowerCase()}`}
+                      >
+                        {burnScore(plan, v.id, game, own.id, v.role).holdValue}
+                        <small>{burnScore(plan, v.id, game, own.id, v.role).recommendation}</small>
                       </span>
                       <button
                         aria-label={`Mark ${champName(v.id)} as bait`}

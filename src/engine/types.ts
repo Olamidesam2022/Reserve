@@ -41,7 +41,8 @@ export interface Plan {
   intendedPicks: Record<number, IntendedPick[]>;
 }
 export interface BurnResult {
-  score: number;
+  holdValue: number;
+  recommendation: 'SPEND' | 'HOLD' | 'NEUTRAL';
   reasons: string[];
 }
 export interface ValidationWarning {

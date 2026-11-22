@@ -7,12 +7,20 @@ import {
   type ValidationWarning,
 } from './types';
 import { lockState } from './lockState';
+import { ENGINE_CONFIG } from './config';
 
 function comfortFor(team: Team, role: Role, champ: string): number {
   return Math.max(
     0,
     ...team.players.filter((p) => p.role === role).map((p) => p.comfort[champ] ?? 0),
   );
+}
+function roleComfort(team: Team, role: Role): Record<string, number> {
+  const comfort: Record<string, number> = {};
+  for (const player of team.players.filter((candidate) => candidate.role === role))
+    for (const [championId, rating] of Object.entries(player.comfort))
+      comfort[championId] = Math.max(comfort[championId] ?? 0, rating);
+  return comfort;
 }
 function spent(plan: Plan, teamId: string, gameIndex: number): Set<string> {
   const used = new Set<string>();
@@ -32,39 +40,69 @@ export function burnScore(
   const selectedRole =
     role ?? plan.intendedPicks[gameIndex]?.find((p) => p.championId === championId)?.role ?? 'Mid';
   const comfort = comfortFor(team, selectedRole, championId);
-  const available = Object.values(
-    team.players
-      .filter((p) => p.role === selectedRole)
-      .reduce<Record<string, number>>((a, p) => ({ ...a, ...p.comfort }), {}),
-  ).filter((v) => v >= 3).length;
-  const left = Object.entries(
-    team.players
-      .filter((p) => p.role === selectedRole)
-      .reduce<Record<string, number>>((a, p) => ({ ...a, ...p.comfort }), {}),
-  ).filter(
-    ([id, value]) =>
-      value >= 3 &&
-      !spent(plan, teamId, gameIndex).has(id) &&
-      !lockState(plan.series, gameIndex).has(id),
-  ).length;
-  const scarcity = available ? 1 - left / available : 0;
-  const score =
-    Math.round(
-      (comfort * 12 +
-        scarcity * 35 +
-        (team.players.some((p) => p.comfort[championId] >= 3) ? 8 : 0)) *
-        10,
-    ) / 10;
+  const locked = lockState(plan.series, gameIndex).has(championId);
+  const used = spent(plan, teamId, gameIndex);
+  const strongOptions = roleComfort(team, selectedRole);
+  const strongRemaining = Object.entries(strongOptions)
+    .filter(
+      ([id, rating]) =>
+        rating >= ENGINE_CONFIG.comfort.strongOptionThreshold &&
+        !used.has(id) &&
+        !lockState(plan.series, gameIndex).has(id),
+    )
+    .map(([id]) => id);
+  const isStrong = comfort >= ENGINE_CONFIG.comfort.strongOptionThreshold;
+  const isAvailableStrong = isStrong && !used.has(championId) && !locked;
+  const strongRemainingIncludingThis = strongRemaining.length;
+  const scarcity =
+    isAvailableStrong && strongRemainingIncludingThis > 0 ? 1 / strongRemainingIncludingThis : 0;
+  const flexibility = ROLES.filter((candidateRole) =>
+    team.players.some(
+      (player) => (player.comfort[championId] ?? 0) > 0 && player.role === candidateRole,
+    ),
+  );
+  const flexNorm =
+    flexibility.length <= 1 ? 0 : clamp((flexibility.length - 1) / (ROLES.length - 1));
+  const gamesRemaining = Math.max(0, plan.series.games.length - gameIndex + 1);
+  const gamesLeftNorm = clamp(gamesRemaining / Math.max(1, plan.series.games.length));
+  const holdValue = Math.round(
+    ENGINE_CONFIG.holdScore.maximum *
+      (ENGINE_CONFIG.holdScore.weights.scarcity * clamp(scarcity) +
+        ENGINE_CONFIG.holdScore.weights.comfort * comfortNorm(comfort) +
+        ENGINE_CONFIG.holdScore.weights.flexibility * flexNorm +
+        ENGINE_CONFIG.holdScore.weights.gamesRemaining * gamesLeftNorm),
+  );
+  const recommendation =
+    holdValue >= ENGINE_CONFIG.holdScore.recommendation.holdAtOrAbove
+      ? 'HOLD'
+      : holdValue <= ENGINE_CONFIG.holdScore.recommendation.spendAtOrBelow
+        ? 'SPEND'
+        : 'NEUTRAL';
+  const leftAfterSpending = Math.max(0, strongRemainingIncludingThis - (isAvailableStrong ? 1 : 0));
+  const roleLabel = flexibility.length > 1 ? flexibility.join(' and ') : selectedRole;
+  const reasons = [
+    locked
+      ? `${championId} is locked from an earlier game`
+      : isStrong
+        ? `${strongRemainingIncludingThis === 1 ? 'Last strong' : 'Strong'} ${selectedRole} option: spending it leaves ${leftAfterSpending}`
+        : `Not a strong ${selectedRole} option; ${strongRemainingIncludingThis} strong option${strongRemainingIncludingThis === 1 ? '' : 's'} remain`,
+    `Comfort ${comfort}/${ENGINE_CONFIG.comfort.maximum}`,
+    ...(flexibility.length > 1 ? [`Plays ${roleLabel}: flex value`] : []),
+    `${gamesRemaining} game${gamesRemaining === 1 ? '' : 's'} remaining in the series`,
+  ];
   return {
-    score,
-    reasons: [
-      `Comfort ${comfort}/5 on ${selectedRole}`,
-      `${left} strong ${selectedRole} option${left === 1 ? '' : 's'} remain`,
-      ...(team.players.some((p) => p.comfort[championId] >= 3)
-        ? ['A comfort pick for this team']
-        : []),
-    ],
+    holdValue: Math.max(0, Math.min(ENGINE_CONFIG.holdScore.maximum, holdValue)),
+    recommendation,
+    reasons,
   };
+}
+
+function clamp(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+function comfortNorm(value: number): number {
+  return clamp(value / ENGINE_CONFIG.comfort.maximum);
 }
 export function exhaustion(
   team: Team,
