@@ -3,12 +3,7 @@ import type { Plan } from '../../engine/types';
 import type { SimulationResult } from '../../engine/simulate';
 import { ENGINE_CONFIG } from '../../engine/config';
 
-export function useSimulation(
-  plans: Plan[],
-  selectedPlanId: string,
-  currentGame: number,
-  onError: () => void,
-) {
+export function useSimulation(plans: Plan[], selectedPlanId: string, onError: () => void) {
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [compareResults, setCompareResults] = useState<Record<string, SimulationResult>>({});
@@ -25,7 +20,7 @@ export function useSimulation(
       type: 'module',
     });
     workerRef.current = worker;
-    worker.postMessage({ plans, currentGame, iterations: ENGINE_CONFIG.simulation.iterations });
+    worker.postMessage({ plans, iterations: ENGINE_CONFIG.simulation.iterations });
     worker.onmessage = (event) => {
       if (event.data.type === 'progress') {
         setProgress(
@@ -65,7 +60,7 @@ export function useSimulation(
       worker.terminate();
       workerRef.current = null;
     };
-  }, [currentGame, onError, plans, selectedPlanId]);
+  }, [onError, plans, selectedPlanId]);
 
   const selectResult = useCallback(
     (planId: string) => {

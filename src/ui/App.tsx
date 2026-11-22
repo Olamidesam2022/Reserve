@@ -55,7 +55,7 @@ export default function App() {
   const plan = plans[active];
   const [tab, setTab] = useState<'board' | 'review'>('board');
   const { version: dataVersion, names: dragonNames } = useDataDragon();
-  const simulation = useSimulation(plans, plan.id, game, () =>
+  const simulation = useSimulation(plans, plan.id, () =>
     setNotice('Simulator could not start. Reload and try again.'),
   );
   const { progress, result, compareResults } = simulation;
@@ -333,10 +333,7 @@ export default function App() {
                 <aside className="right-rail">
                   <OpponentPanel>
                     <div className="eyebrow">02 / OPPONENT READ</div>
-                    <div className="enemy-title">
-                      {enemy.name}
-                      <span>BLUE SIDE</span>
-                    </div>
+                    <div className="enemy-title">{enemy.name}</div>
                     <div className="opponent-picks">
                       {ROLES.map((r) => (
                         <span key={r}>
@@ -572,7 +569,7 @@ export default function App() {
                     <div key={role}>
                       <span>{role}</span>
                       <Slot
-                        team="red"
+                        team={enemy.id}
                         role={role}
                         id={
                           plan.intendedPicks[game]?.find(
@@ -580,7 +577,6 @@ export default function App() {
                           )?.championId
                         }
                         locked={false}
-                        assign={assign}
                       />
                       {live && (
                         <select

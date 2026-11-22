@@ -44,6 +44,8 @@ export function Tile({
           : undefined
       }
       aria-label={`${champ?.name ?? id}${locked ? ', locked' : ''}${reserved ? ', reserved' : ''}`}
+      tabIndex={overlay ? -1 : undefined}
+      aria-hidden={overlay || undefined}
     >
       <div className="tile-art">
         {champ && !failed ? (
@@ -65,23 +67,20 @@ export function Slot({
   role,
   id,
   locked,
-  assign,
 }: {
   team: string;
   role: Role;
   id?: string;
   locked: boolean;
-  assign: (team: string, role: Role, championId: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `${team}:${role}` });
   return (
     <div
       ref={setNodeRef}
       className={`slot ${team === 'red' ? 'enemy' : ''} ${isOver ? 'over' : ''}`}
-      onClick={() => id && assign(team, role, id)}
     >
       {id ? (
-        <Tile id={id} locked={locked} reserved />
+        <Tile id={id} locked={locked} reserved layoutId={`${team}:${id}`} />
       ) : (
         <span className="slot-empty">DROP {role.toUpperCase()}</span>
       )}
@@ -141,7 +140,9 @@ export function BoardCell({
           {bait && <small className="bait">BAIT → {champions[bait]?.name ?? bait}</small>}
         </>
       ) : (
-        <span>DROP PICK</span>
+        <span className="board-empty" aria-hidden="true">
+          +
+        </span>
       )}
     </div>
   );

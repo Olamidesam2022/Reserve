@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --pretty",
     "test": "vitest run",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "contrast": "node scripts/check-contrast.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

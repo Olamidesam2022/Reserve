@@ -22,11 +22,11 @@
 }
 .plan-compare-row > strong small {
   display: block;
-  font: 7px var(--mono);
+  font: 11px var(--mono);
   color: #8f999a;
 }
 .risk-count {
-  font: 8px var(--mono);
+  font: 11px var(--mono);
   color: #92999a;
   text-align: right;
 }
@@ -43,7 +43,7 @@
   flex-wrap: wrap;
 }
 .live-bans label {
-  font: 9px var(--mono);
+  font: 11px var(--mono);
   color: #a4abad;
 }
 .live-bans > div {
@@ -54,13 +54,13 @@
 .live-bans > div span {
   padding: 5px 7px;
   border: 1px solid var(--line);
-  font: 8px var(--mono);
+  font: 11px var(--mono);
   color: #aaa;
 }
 .pool-paste {
   position: relative;
   height: auto;
-  font: 9px var(--mono);
+  font: 11px var(--mono);
   color: #9da4a4;
 }
 .pool-paste summary {
@@ -96,13 +96,13 @@
   color: #e7e5de;
   border: 1px solid var(--line);
   padding: 8px;
-  font: 9px var(--mono);
+  font: 11px var(--mono);
 }
 .pool-paste button {
   margin: 0 0 12px;
   background: #292e30;
   border: 1px solid #505758;
   padding: 7px;
-  font: 8px var(--mono);
+  font: 11px var(--mono);
   color: var(--amber);
 }

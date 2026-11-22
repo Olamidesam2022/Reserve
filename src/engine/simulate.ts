@@ -132,10 +132,11 @@ export function simulate(
   plan: Plan,
   iterations: number = ENGINE_CONFIG.simulation.iterations,
   onProgress: (done: number, total: number, distribution: ScoreDistribution) => void = () => {},
-  currentGame = 1,
 ): SimulationResult {
   const gameCount = plan.series.games.length;
-  const startGame = Math.max(1, Math.min(currentGame, gameCount));
+  // The data model does not store previous game winners, so a valid final score
+  // distribution must simulate the complete planned series from Game 1.
+  const startGame = 1;
   const winsToTakeSeries = plan.series.format === 'bo5' ? 3 : 2;
   const scores = Object.fromEntries(scoreKeys(plan.series.format).map((key) => [key, 0]));
   const random = randomFor(

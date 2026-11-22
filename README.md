@@ -21,6 +21,8 @@ Plan data is stored in browser localStorage. Champion artwork and names use Riot
 - `npm test` runs the Vitest suite.
 - `npm run typecheck` checks TypeScript projects.
 - `npm run build` typechecks and creates a production build in `dist/`.
+- `npm run format` formats project files with Prettier.
+- `npm run contrast` checks the main text and background color token pairs for WCAG AA contrast.
 
 ## CSV import format
 
@@ -38,7 +40,7 @@ Each row records one champion comfort rating for one player and role. Roles are 
 - `src/engine/` series rules, validation, simulation, and engine tests.
 - `src/data/` bundled example pools and CSV/manual pool parsers.
 - `src/storage/` local plan persistence.
-- `src/ui/` React application and styles.
+- `src/ui/` React application and styles, with reusable components in `components/` and effects in `hooks/`.
 - `public/` app logos and static assets.
 
 ## How scoring works
@@ -51,3 +53,5 @@ Each pool champion receives a **hold value from 0 to 100**. Higher values mean i
 - **Games remaining (10%)**: games still to be played, including the current game, divided by the series length.
 
 The result is rounded to the nearest whole number. Scores of 65 or higher recommend **HOLD**; scores of 35 or lower recommend **SPEND**; scores in between are **NEUTRAL**. The pool list includes a brief reason for each score, such as a last strong option, comfort rating, or flex value. Tuning weights and thresholds live together in `src/engine/config.ts`.
+
+The series simulator projects the complete planned series from Game 1. The app does not record prior game winners, so it cannot condition that projection on an in-progress series score.

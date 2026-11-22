@@ -2,9 +2,7 @@ import { simulate } from './simulate';
 import type { Plan } from './types';
 import { ENGINE_CONFIG } from './config';
 
-self.onmessage = (
-  event: MessageEvent<{ plan?: Plan; plans?: Plan[]; iterations?: number; currentGame?: number }>,
-) => {
+self.onmessage = (event: MessageEvent<{ plan?: Plan; plans?: Plan[]; iterations?: number }>) => {
   const plans = event.data.plans ?? (event.data.plan ? [event.data.plan] : []);
   plans.forEach((plan, planIndex) => {
     const result = simulate(
@@ -21,7 +19,6 @@ self.onmessage = (
           scoreDistribution,
         });
       },
-      event.data.currentGame ?? 1,
     );
     self.postMessage({ type: 'result', planId: plan.id, planIndex, result });
   });
