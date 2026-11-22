@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Plan } from '../../engine/types';
 import type { SimulationResult } from '../../engine/simulate';
+import { ENGINE_CONFIG } from '../../engine/config';
 
-export function useSimulation(plans: Plan[], selectedPlanId: string, onError: () => void) {
+export function useSimulation(
+  plans: Plan[],
+  selectedPlanId: string,
+  currentGame: number,
+  onError: () => void,
+) {
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [compareResults, setCompareResults] = useState<Record<string, SimulationResult>>({});
@@ -19,7 +25,7 @@ export function useSimulation(plans: Plan[], selectedPlanId: string, onError: ()
       type: 'module',
     });
     workerRef.current = worker;
-    worker.postMessage({ plans });
+    worker.postMessage({ plans, currentGame, iterations: ENGINE_CONFIG.simulation.iterations });
     worker.onmessage = (event) => {
       if (event.data.type === 'progress') {
         setProgress(
@@ -31,12 +37,20 @@ export function useSimulation(plans: Plan[], selectedPlanId: string, onError: ()
         setCompareResults((old) => ({
           ...old,
           [event.data.planId]: {
-            chance: old[event.data.planId]?.chance ?? 0,
-            distribution: event.data.distribution,
+            seriesWinChance: Object.entries(
+              event.data.scoreDistribution as Record<string, number>,
+            ).reduce((total, [score, frequency]) => {
+              const [blueWins, redWins] = score.split('-').map(Number);
+              return total + (blueWins > redWins ? frequency : 0);
+            }, 0),
+            scoreDistribution: event.data.scoreDistribution,
           },
         }));
         if (event.data.planId === selectedPlanId) {
-          setResult((old) => ({ chance: old?.chance ?? 0, distribution: event.data.distribution }));
+          setResult((old) => ({
+            seriesWinChance: old?.seriesWinChance ?? 0,
+            scoreDistribution: event.data.scoreDistribution,
+          }));
         }
       } else if (event.data.type === 'result') {
         setCompareResults((old) => ({ ...old, [event.data.planId]: event.data.result }));
@@ -51,7 +65,7 @@ export function useSimulation(plans: Plan[], selectedPlanId: string, onError: ()
       worker.terminate();
       workerRef.current = null;
     };
-  }, [onError, plans, selectedPlanId]);
+  }, [currentGame, onError, plans, selectedPlanId]);
 
   const selectResult = useCallback(
     (planId: string) => {

@@ -16,4 +16,9 @@ export const ENGINE_CONFIG = {
     },
     maximum: 100,
   },
+  simulation: {
+    iterations: 1200,
+    logisticScale: 0.22,
+    baitWeightMultiplier: 2.4,
+  },
 } as const;

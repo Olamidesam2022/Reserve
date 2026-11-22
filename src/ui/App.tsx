@@ -6,6 +6,7 @@ import { champions } from '../data/seed';
 import { CsvPoolSource, ManualPoolSource } from '../data/poolSource';
 import { burnScore, exhaustion, lockState, validate } from '../engine';
 import { ROLES, type Role } from '../engine/types';
+import { ENGINE_CONFIG } from '../engine/config';
 import { BoardCell, Review, Slot, Tile } from './components/Primitives';
 import {
   Brief,
@@ -42,11 +43,11 @@ export default function App() {
   const plan = plans[active];
   const [tab, setTab] = useState<'board' | 'review'>('board');
   const { version: dataVersion, names: dragonNames } = useDataDragon();
-  const simulation = useSimulation(plans, plan.id, () =>
+  const simulation = useSimulation(plans, plan.id, game, () =>
     setNotice('Simulator could not start. Reload and try again.'),
   );
   const { progress, result, compareResults } = simulation;
-  const countUp = useCountUp(result?.chance);
+  const countUp = useCountUp(result ? result.seriesWinChance * 100 : undefined);
   const [pulseChampion, setPulseChampion] = useState('');
   const [cascadeFrom, setCascadeFrom] = useState(0);
   const [notice, setNotice] = useState('');
@@ -138,7 +139,10 @@ export default function App() {
         <div className="hero-readout">
           <div className="eyebrow">SERIES WIN CHANCE</div>
           <strong>{result ? `${countUp}%` : '—'}</strong>
-          <span>{result ? '3 PLANS · 1,200 RUNS EACH' : 'RUN ALL THREE PLANS'}</span>
+          <span>
+            {plans.length} PLAN{plans.length === 1 ? '' : 'S'} ·{' '}
+            {ENGINE_CONFIG.simulation.iterations.toLocaleString()} RUNS EACH
+          </span>
           <button className="run-btn" onClick={simulation.run}>
             SIMULATE SERIES ↗
           </button>
@@ -418,7 +422,9 @@ export default function App() {
                       PLAN {String.fromCharCode(65 + i)} <span>{p.name}</span>
                     </button>
                     <strong>
-                      {compareResults[p.id]?.chance ?? '—'}
+                      {compareResults[p.id]
+                        ? Math.round(compareResults[p.id].seriesWinChance * 100)
+                        : '—'}
                       <small>{compareResults[p.id] ? '% WIN' : ' WIN'}</small>
                     </strong>
                     <span className="risk-count">{validate(p).length} WARN</span>
@@ -428,15 +434,17 @@ export default function App() {
               {result && (
                 <div className="distribution">
                   <div className="eyebrow">WIN PROBABILITY DISTRIBUTION</div>
-                  <div className="bars">
-                    {result.distribution.map((v, i) => (
-                      <i
-                        key={i}
-                        title={`${i * 10}–${i * 10 + 10}%`}
-                        style={{
-                          height: `${Math.max(4, (v / Math.max(...result.distribution)) * 100)}%`,
-                        }}
-                      />
+                  <div className="score-bars">
+                    {Object.entries(result.scoreDistribution).map(([score, probability]) => (
+                      <div
+                        className="score-bar"
+                        key={score}
+                        title={`${score}: ${Math.round(probability * 100)}%`}
+                      >
+                        <i style={{ height: `${Math.max(3, probability * 100)}%` }} />
+                        <span>{score}</span>
+                        <small>{Math.round(probability * 100)}%</small>
+                      </div>
                     ))}
                   </div>
                   <div className="progress">SIMULATION {progress}% COMPLETE</div>

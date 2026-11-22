@@ -70,13 +70,51 @@ describe('series engine', () => {
   it('tracks flex only when a champion spans roles', () => {
     expect(flexTracker(plan)).toEqual([]);
   });
-  it('simulates repeatably and streams a full probability distribution', () => {
+  it('simulates repeatably and streams final-score probabilities', () => {
     const updates: number[] = [];
     const a = simulate(plan, 40, (done) => updates.push(done));
     const b = simulate(plan, 40);
     expect(a).toEqual(b);
-    expect(a.distribution).toHaveLength(10);
-    expect(a.distribution.reduce((sum, n) => sum + n, 0)).toBe(40);
+    expect(Object.keys(a.scoreDistribution)).toEqual(['3-0', '3-1', '3-2', '2-3', '1-3', '0-3']);
+    expect(Object.values(a.scoreDistribution).reduce((sum, n) => sum + n, 0)).toBeCloseTo(1);
+    expect(a.seriesWinChance).toBeGreaterThanOrEqual(0);
+    expect(a.seriesWinChance).toBeLessThanOrEqual(1);
     expect(updates.at(-1)).toBe(40);
+  });
+
+  it('gives a clearly stronger team a higher series win chance', () => {
+    const strongTeam = {
+      id: 'blue',
+      name: 'blue',
+      players: ['Top', 'Jungle', 'Mid', 'Bot', 'Support'].map((role) => ({
+        playerId: `blue-${role}`,
+        role: role as (typeof plan.series.teams)[number]['players'][number]['role'],
+        comfort: Object.fromEntries(
+          Array.from({ length: 5 }, (_, index) => [`${role}-${index}`, 5]),
+        ),
+      })),
+    };
+    const weakTeam = { id: 'red', name: 'red', players: [] };
+    const strongPlan: Plan = {
+      ...plan,
+      id: 'strong',
+      series: { ...plan.series, teams: [strongTeam, weakTeam] },
+      intendedPicks: {},
+    };
+    expect(simulate(strongPlan, 1000).seriesWinChance).toBeGreaterThan(0.9);
+  });
+
+  it('uses the correct final score space for a best-of-three', () => {
+    const bo3: Plan = {
+      ...plan,
+      series: {
+        ...plan.series,
+        format: 'bo3',
+        games: plan.series.games.slice(0, 3),
+      },
+    };
+    const result = simulate(bo3, 100);
+    expect(Object.keys(result.scoreDistribution)).toEqual(['2-0', '2-1', '1-2', '0-2']);
+    expect(Object.values(result.scoreDistribution).reduce((sum, n) => sum + n, 0)).toBeCloseTo(1);
   });
 });
