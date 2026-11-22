@@ -27,6 +27,7 @@ body {
   background-size: 38px 38px;
   background-position: center;
   color: #e8e7e2;
+  overflow-x: clip;
 }
 button {
   font: inherit;
@@ -1002,60 +1003,99 @@ footer span:last-child {
 @media (max-width: 650px) {
   .app {
     padding: 0 14px 18px;
+    width: 100%;
+    min-width: 0;
   }
   .topbar {
     height: 60px;
+    gap: 12px;
   }
   .brand {
     width: 112px;
   }
   .top-meta {
+    display: none;
     font-size: 11px;
   }
   .live-toggle {
     font-size: 11px;
-    padding: 8px;
+    min-height: 44px;
+    padding: 8px 12px;
   }
   .hero {
+    flex-direction: column;
     padding: 32px 0;
-    align-items: flex-start;
+    align-items: stretch;
+    gap: 22px;
   }
   .hero h1 {
     font-size: 42px;
   }
   .hero-readout {
-    width: 140px;
-    padding-left: 12px;
+    width: 100%;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 4px 14px;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding: 14px 0 0;
   }
   .hero-readout strong {
     font-size: 42px;
+    grid-column: 1;
+    grid-row: 2 / span 2;
   }
   .hero-readout .eyebrow {
     font-size: 11px;
+    grid-column: 1 / -1;
+  }
+  .hero-readout > span,
+  .hero-readout .run-btn {
+    grid-column: 2;
+    justify-self: start;
   }
   .hero-readout .run-btn {
     font-size: 11px;
     padding: 9px;
+    margin: 2px 0 0;
   }
   .toolbar {
+    flex-direction: column;
     height: auto;
     min-height: 48px;
-    align-items: flex-start;
+    align-items: stretch;
+    gap: 0;
+  }
+  .tabs {
+    width: 100%;
+    justify-content: space-between;
     gap: 10px;
   }
-  .tabs,
+  .tabs button {
+    min-height: 44px;
+    white-space: nowrap;
+  }
   .toolbar-right {
-    gap: 10px;
+    width: 100%;
+    min-height: 48px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
   }
   .tabs button,
   .toolbar-right button,
   .import-label {
     font-size: 11px;
   }
-  .toolbar-right {
-    flex-direction: column;
-    align-items: flex-end;
-    padding: 7px 0;
+  .toolbar-right > button,
+  .import-label,
+  .pool-paste summary {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
   }
   .panel-head h2 {
     font-size: 16px;
@@ -1067,6 +1107,37 @@ footer span:last-child {
   .board-row {
     grid-template-columns: 72px repeat(5, minmax(74px, 1fr));
     min-width: 450px;
+  }
+  .board-wrap {
+    width: 100%;
+    max-width: 100%;
+    max-height: min(58vh, 490px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    position: relative;
+  }
+  .board-head {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: #1b1e20;
+  }
+  .board-head > span:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 6;
+    background: #1b1e20;
+  }
+  .role-tag {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: #1b1e20;
+    padding-left: 4px;
+  }
+  .game-select button {
+    width: 44px;
+    height: 44px;
   }
   .board-row {
     min-height: 102px;
@@ -1115,6 +1186,11 @@ footer span:last-child {
   }
   footer {
     font-size: 11px;
+    flex-wrap: wrap;
+  }
+  footer span:last-child {
+    flex-basis: 100%;
+    margin-left: 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {

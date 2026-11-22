@@ -23,6 +23,7 @@ Plan data is stored in browser localStorage. Champion artwork and names use Riot
 - `npm run build` typechecks and creates a production build in `dist/`.
 - `npm run format` formats project files with Prettier.
 - `npm run contrast` checks the main text and background color token pairs for WCAG AA contrast.
+- `npm run screenshots` verifies the desktop/mobile layouts and refreshes the Playwright screenshots.
 
 ## CSV import format
 
@@ -42,6 +43,16 @@ Each row records one champion comfort rating for one player and role. Roles are 
 - `src/storage/` local plan persistence.
 - `src/ui/` React application and styles, with reusable components in `components/` and effects in `hooks/`.
 - `public/` app logos and static assets.
+
+## Screenshots
+
+Desktop at 1440×900:
+
+![Reserve desktop at 1440 by 900](docs/screenshots/reserve-desktop-1440x900.png)
+
+Mobile at 390×844:
+
+![Reserve mobile at 390 by 844](docs/screenshots/reserve-mobile-390x844.png)
 
 ## How scoring works
 
