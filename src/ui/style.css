@@ -389,7 +389,17 @@ p {
 }
 .tile.dragging {
   z-index: 5;
+  opacity: 0;
   box-shadow: 0 14px 32px #000b;
+}
+.tile.drag-overlay {
+  z-index: 20;
+  opacity: 1;
+  transform: scale(1.06);
+  box-shadow: 0 20px 42px #000c;
+}
+.drag-overlay-motion {
+  transform-origin: center;
 }
 .bait {
   position: absolute;
@@ -1132,7 +1142,7 @@ footer span:last-child {
 .board-cell.cascade {
   animation: column-ripple 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
-.meter-row.critical > div:first-child span {
+.meter-row.critical.shake > div:first-child span {
   animation: role-shake 180ms ease-out both;
 }
 .own-actual-row {

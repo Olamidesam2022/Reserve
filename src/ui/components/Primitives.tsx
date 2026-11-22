@@ -11,27 +11,33 @@ export function Tile({
   reserved = false,
   pulse = false,
   onClick,
+  layoutId,
+  overlay = false,
 }: {
   id: string;
   locked?: boolean;
   reserved?: boolean;
   pulse?: boolean;
   onClick?: () => void;
+  layoutId?: string;
+  overlay?: boolean;
 }) {
   const champ = champions[id];
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id,
-    disabled: locked,
+    disabled: locked || overlay,
   });
   const [failed, setFailed] = useState(false);
   return (
     <motion.button
       layout
+      layoutId={layoutId}
+      transition={{ layout: { type: 'spring', stiffness: 520, damping: 38, duration: 0.55 } }}
       ref={setNodeRef}
-      {...attributes}
-      {...listeners}
+      {...(!overlay ? attributes : {})}
+      {...(!overlay ? listeners : {})}
       onClick={onClick}
-      className={`tile ${locked ? 'locked' : ''} ${reserved ? 'reserved' : ''} ${isDragging ? 'dragging' : ''} ${pulse ? 'lock-pulse' : ''}`}
+      className={`tile ${locked ? 'locked' : ''} ${reserved ? 'reserved' : ''} ${isDragging ? 'dragging' : ''} ${pulse ? 'lock-pulse' : ''} ${overlay ? 'drag-overlay' : ''}`}
       style={
         transform
           ? { transform: `translate3d(${transform.x}px,${transform.y}px,0) scale(1.06)` }
@@ -125,7 +131,13 @@ export function BoardCell({
     >
       {pick ? (
         <>
-          <Tile id={pick} locked={locked} reserved={!locked && game > 1} pulse={pulse} />
+          <Tile
+            id={pick}
+            locked={locked}
+            reserved={!locked && game > 1}
+            pulse={pulse}
+            layoutId={`${team}:${pick}`}
+          />
           {bait && <small className="bait">BAIT → {champions[bait]?.name ?? bait}</small>}
         </>
       ) : (
