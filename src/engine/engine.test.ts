@@ -118,6 +118,82 @@ describe('series engine', () => {
     expect(Object.values(result.scoreDistribution).reduce((sum, n) => sum + n, 0)).toBeCloseTo(1);
   });
 
+  it('returns a valid series distribution when both teams have empty pools', () => {
+    const emptyPlan: Plan = {
+      ...plan,
+      id: 'empty-pools',
+      series: {
+        ...plan.series,
+        format: 'bo3',
+        teams: [
+          { id: 'blue', name: 'blue', players: [] },
+          { id: 'red', name: 'red', players: [] },
+        ],
+        games: plan.series.games.slice(0, 3),
+      },
+      intendedPicks: {},
+    };
+    const result = simulate(emptyPlan, 200);
+    expect(
+      Object.values(result.scoreDistribution).reduce((sum, value) => sum + value, 0),
+    ).toBeCloseTo(1);
+  });
+
+  it('does not reuse a one-champion pool after its pick is locked', () => {
+    const oneChampion: Plan = {
+      ...plan,
+      id: 'one-champion',
+      series: {
+        ...plan.series,
+        format: 'bo3',
+        teams: [
+          {
+            id: 'blue',
+            name: 'blue',
+            players: [{ playerId: 'blue-mid', role: 'Mid', comfort: { OnlyPick: 5 } }],
+          },
+          { id: 'red', name: 'red', players: [] },
+        ],
+        games: plan.series.games.slice(0, 3),
+      },
+      intendedPicks: {
+        1: [{ teamId: 'blue', role: 'Mid', championId: 'OnlyPick' }],
+      },
+    };
+    const chance = simulate(oneChampion, 4000).seriesWinChance;
+    expect(chance).toBeGreaterThan(0.52);
+    expect(chance).toBeLessThan(0.72);
+  });
+
+  it('tracks champions that span multiple roles', () => {
+    const flexPlan: Plan = {
+      ...plan,
+      series: {
+        ...plan.series,
+        teams: [
+          {
+            id: 'blue',
+            name: 'blue',
+            players: [
+              { playerId: 'blue-mid', role: 'Mid', comfort: { Taliyah: 5 } },
+              { playerId: 'blue-jungle', role: 'Jungle', comfort: { Taliyah: 4 } },
+            ],
+          },
+          plan.series.teams[1],
+        ],
+      },
+      intendedPicks: {
+        1: [
+          { teamId: 'blue', role: 'Mid', championId: 'Taliyah' },
+          { teamId: 'blue', role: 'Jungle', championId: 'Taliyah' },
+        ],
+      },
+    };
+    expect(flexTracker(flexPlan)).toEqual([
+      { championId: 'Taliyah', possibleRoles: ['Jungle', 'Mid'] },
+    ]);
+  });
+
   it('biases an available opponent counter toward being spent', () => {
     const baitPlan = (withBait: boolean): Plan => {
       const baitingBlue = {
