@@ -677,7 +677,6 @@ export default function App() {
         <footer>
           <img src="/logo-mark.svg" alt="" />
           <span>RESERVE / SERIES RESOURCE PLANNER</span>
-          <span>NO BACKEND · LOCAL STORAGE ONLY</span>
         </footer>
         <AnimatePresence>
           {notice && (
