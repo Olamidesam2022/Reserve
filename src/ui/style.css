@@ -22,8 +22,8 @@ body {
   margin: 0;
   background-color: var(--bg);
   background-image:
-    linear-gradient(#fff04 1px, transparent 1px),
-    linear-gradient(90deg, #fff04 1px, transparent 1px);
+    linear-gradient(#ffffff04 1px, transparent 1px),
+    linear-gradient(90deg, #ffffff04 1px, transparent 1px);
   background-size: 38px 38px;
   background-position: center;
   color: #e8e7e2;
